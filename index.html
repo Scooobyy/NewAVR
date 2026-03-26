@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>AR Furniture - Working Version</title>
+    <title>AR Furniture - VISIBLE Version</title>
     <style>
         body {
             margin: 0;
@@ -41,7 +41,7 @@
             gap: 12px;
             z-index: 2;
             padding: 12px;
-            background: rgba(0,0,0,0.7);
+            background: rgba(0,0,0,0.8);
             backdrop-filter: blur(10px);
             flex-wrap: wrap;
         }
@@ -80,7 +80,7 @@
             top: 20px;
             left: 20px;
             right: 20px;
-            background: rgba(0,0,0,0.8);
+            background: rgba(0,0,0,0.85);
             color: #ffd700;
             padding: 12px;
             border-radius: 20px;
@@ -96,33 +96,34 @@
             position: fixed;
             top: 50%;
             left: 50%;
-            width: 40px;
-            height: 40px;
+            width: 50px;
+            height: 50px;
             transform: translate(-50%, -50%);
-            border: 2px solid white;
+            border: 3px solid #ffd700;
             border-radius: 50%;
             z-index: 2;
             pointer-events: none;
-            background: rgba(255,255,255,0.2);
+            background: rgba(255,215,0,0.2);
+            box-shadow: 0 0 0 2px rgba(0,0,0,0.5);
         }
         
         #crosshair::before, #crosshair::after {
             content: '';
             position: absolute;
-            background: white;
+            background: #ffd700;
         }
         
         #crosshair::before {
             top: 50%;
-            left: 0;
-            right: 0;
+            left: 10%;
+            right: 10%;
             height: 2px;
             transform: translateY(-50%);
         }
         
         #crosshair::after {
-            top: 0;
-            bottom: 0;
+            top: 10%;
+            bottom: 10%;
             left: 50%;
             width: 2px;
             transform: translateX(-50%);
@@ -155,17 +156,18 @@
             #status { font-size: 11px; top: 10px; }
         }
         
-        .distance-indicator {
+        .debug-info {
             position: fixed;
             bottom: 100px;
-            right: 20px;
+            left: 20px;
             background: rgba(0,0,0,0.7);
-            color: white;
+            color: #0f0;
             padding: 5px 10px;
-            border-radius: 20px;
-            font-size: 12px;
-            z-index: 2;
+            border-radius: 10px;
+            font-size: 10px;
             font-family: monospace;
+            z-index: 2;
+            pointer-events: none;
         }
     </style>
 </head>
@@ -174,7 +176,7 @@
     
     <div id="status">🎯 Starting AR... Please allow camera access</div>
     <div id="crosshair"></div>
-    <div class="distance-indicator" id="distance">📍 Distance: --</div>
+    <div class="debug-info" id="debug">📍 Initializing...</div>
     
     <div id="controls">
         <button class="furniture-btn" data-type="chair">🪑 Chair</button>
@@ -186,8 +188,8 @@
     
     <div class="instruction">
         📱 CAMERA ACTIVE!<br>
-        👆 TAP anywhere to place furniture 1.5 meters in front of you<br>
-        🪑 Move your phone to see furniture from different angles!
+        👆 TAP anywhere to place furniture<br>
+        🪑 Furniture will appear 2 meters in FRONT of you
     </div>
 
     <script type="importmap">
@@ -201,12 +203,14 @@
     <script type="module">
         import * as THREE from 'three';
         
-        // --- Setup Scene with Transparent Background ---
+        // --- Setup Scene ---
         const scene = new THREE.Scene();
         
         // Camera for 3D objects
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        camera.position.set(0, 1.6, 0); // Start at origin
+        
+        // Start camera at origin, we'll move it based on device orientation
+        camera.position.set(0, 1.6, 0);
         
         // Renderer with transparent background
         const renderer = new THREE.WebGLRenderer({ alpha: true });
@@ -225,20 +229,18 @@
                 });
                 videoElement.srcObject = stream;
                 await videoElement.play();
-                document.getElementById('status').innerHTML = '✅ Camera ready! TAP anywhere to place furniture';
-                document.getElementById('status').style.background = 'rgba(0,100,0,0.8)';
-                setTimeout(() => {
-                    document.getElementById('status').style.background = 'rgba(0,0,0,0.8)';
-                }, 2000);
+                document.getElementById('status').innerHTML = '✅ Camera ready! TAP anywhere to place furniture in front of you';
+                document.getElementById('debug').innerHTML = '✅ Camera active | Back camera';
             } catch (err) {
                 try {
                     const stream = await navigator.mediaDevices.getUserMedia({ video: true });
                     videoElement.srcObject = stream;
                     await videoElement.play();
-                    document.getElementById('status').innerHTML = '✅ Camera ready! (using front camera)';
+                    document.getElementById('status').innerHTML = '✅ Camera ready! (front camera)';
+                    document.getElementById('debug').innerHTML = '✅ Camera active | Front camera';
                 } catch (err2) {
-                    document.getElementById('status').innerHTML = '❌ Camera access denied. Please allow camera permissions and refresh.';
-                    document.getElementById('status').style.background = 'rgba(255,0,0,0.8)';
+                    document.getElementById('status').innerHTML = '❌ Camera access denied';
+                    document.getElementById('debug').innerHTML = '❌ Camera error';
                 }
             }
         }
@@ -246,51 +248,48 @@
         startCamera();
         
         // --- Lighting ---
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
         scene.add(ambientLight);
         
         const dirLight = new THREE.DirectionalLight(0xffffff, 1);
-        dirLight.position.set(1, 2, 1);
+        dirLight.position.set(2, 3, 2);
         dirLight.castShadow = true;
         scene.add(dirLight);
         
-        const backLight = new THREE.PointLight(0x88aaff, 0.5);
-        backLight.position.set(0, 1, -1);
-        scene.add(backLight);
+        const fillLight = new THREE.PointLight(0x88aaff, 0.4);
+        fillLight.position.set(0, 1, 0);
+        scene.add(fillLight);
         
-        // Helper: Add a subtle grid on the floor to see reference (optional)
-        const gridHelper = new THREE.GridHelper(5, 20, 0x88aaff, 0x335588);
-        gridHelper.position.y = -0.01;
-        gridHelper.material.transparent = true;
-        gridHelper.material.opacity = 0.3;
-        scene.add(gridHelper);
+        // Add a simple helper to show where furniture will appear (invisible but helpful for debug)
+        const helperSphere = new THREE.Mesh(
+            new THREE.SphereGeometry(0.1, 8, 8),
+            new THREE.MeshStandardMaterial({ color: 0xff0000, emissive: 0xff0000 })
+        );
+        helperSphere.visible = false;
+        scene.add(helperSphere);
         
-        // --- Furniture Models (with better visibility) ---
+        // --- Furniture Models (Bold and Visible) ---
         function createChair(x, z, color = 0xCD7F32) {
             const group = new THREE.Group();
             
-            // Seat
-            const seat = new THREE.Mesh(
-                new THREE.BoxGeometry(0.6, 0.12, 0.6),
-                new THREE.MeshStandardMaterial({ color: color, roughness: 0.3, metalness: 0.1 })
-            );
+            // Seat (with bright color)
+            const seatMat = new THREE.MeshStandardMaterial({ color: color, roughness: 0.3, metalness: 0.1 });
+            const seat = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.12, 0.6), seatMat);
             seat.position.y = 0.06;
             seat.castShadow = true;
             seat.receiveShadow = true;
             group.add(seat);
             
             // Backrest
-            const back = new THREE.Mesh(
-                new THREE.BoxGeometry(0.6, 0.5, 0.1),
-                new THREE.MeshStandardMaterial({ color: color, roughness: 0.3 })
-            );
+            const back = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.5, 0.1), seatMat);
             back.position.set(0, 0.3, -0.3);
             back.castShadow = true;
             group.add(back);
             
-            // Legs
-            const legMat = new THREE.MeshStandardMaterial({ color: 0x8B4513 });
-            [[-0.25, -0.02, -0.25], [0.25, -0.02, -0.25], [-0.25, -0.02, 0.25], [0.25, -0.02, 0.25]].forEach(pos => {
+            // Legs (dark brown)
+            const legMat = new THREE.MeshStandardMaterial({ color: 0x5D3A1A });
+            const legPositions = [[-0.25, -0.02, -0.25], [0.25, -0.02, -0.25], [-0.25, -0.02, 0.25], [0.25, -0.02, 0.25]];
+            legPositions.forEach(pos => {
                 const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.2, 6), legMat);
                 leg.position.set(pos[0], pos[1], pos[2]);
                 leg.castShadow = true;
@@ -304,16 +303,15 @@
         function createTable(x, z, color = 0xC19A6B) {
             const group = new THREE.Group();
             
-            const top = new THREE.Mesh(
-                new THREE.BoxGeometry(0.8, 0.1, 0.8),
-                new THREE.MeshStandardMaterial({ color: color, roughness: 0.2, metalness: 0.2 })
-            );
+            const topMat = new THREE.MeshStandardMaterial({ color: color, roughness: 0.2 });
+            const top = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.1, 0.8), topMat);
             top.position.y = 0.4;
             top.castShadow = true;
             group.add(top);
             
             const legMat = new THREE.MeshStandardMaterial({ color: 0x8B5A2B });
-            [[-0.35, 0.2, -0.35], [0.35, 0.2, -0.35], [-0.35, 0.2, 0.35], [0.35, 0.2, 0.35]].forEach(pos => {
+            const legPositions = [[-0.35, 0.2, -0.35], [0.35, 0.2, -0.35], [-0.35, 0.2, 0.35], [0.35, 0.2, 0.35]];
+            legPositions.forEach(pos => {
                 const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.4, 6), legMat);
                 leg.position.set(pos[0], pos[1], pos[2]);
                 leg.castShadow = true;
@@ -327,26 +325,20 @@
         function createLamp(x, z, color = 0xFFAA66) {
             const group = new THREE.Group();
             
-            const base = new THREE.Mesh(
-                new THREE.CylinderGeometry(0.22, 0.26, 0.1, 8),
-                new THREE.MeshStandardMaterial({ color: 0xCCAA77, metalness: 0.6 })
-            );
+            const baseMat = new THREE.MeshStandardMaterial({ color: 0xCCAA77, metalness: 0.6 });
+            const base = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.26, 0.1, 8), baseMat);
             base.position.y = 0.05;
             base.castShadow = true;
             group.add(base);
             
-            const pole = new THREE.Mesh(
-                new THREE.CylinderGeometry(0.08, 0.08, 0.6, 6),
-                new THREE.MeshStandardMaterial({ color: 0xAA8866, metalness: 0.5 })
-            );
+            const poleMat = new THREE.MeshStandardMaterial({ color: 0xAA8866, metalness: 0.5 });
+            const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.6, 6), poleMat);
             pole.position.y = 0.35;
             pole.castShadow = true;
             group.add(pole);
             
-            const bulb = new THREE.Mesh(
-                new THREE.SphereGeometry(0.14, 16, 16),
-                new THREE.MeshStandardMaterial({ color: 0xFFDD88, emissive: 0xFF8800, emissiveIntensity: 0.6 })
-            );
+            const bulbMat = new THREE.MeshStandardMaterial({ color: 0xFFDD88, emissive: 0xFF8800, emissiveIntensity: 0.7 });
+            const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.14, 16, 16), bulbMat);
             bulb.position.y = 0.68;
             bulb.castShadow = true;
             group.add(bulb);
@@ -359,15 +351,14 @@
         let furnitureItems = [];
         let currentType = 'chair';
         
-        // --- Simple AR Placement: Place furniture at a fixed distance in front of camera ---
+        // --- CRITICAL: Place furniture directly in front of camera ---
         function getPlacementPosition() {
             // Get camera's forward direction
-            const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
-            forward.y = 0; // Keep on ground plane
-            forward.normalize();
+            const forward = new THREE.Vector3(0, 0, -1);
+            forward.applyQuaternion(camera.quaternion);
             
-            // Place at 1.5 meters in front, on ground level (y=0)
-            const distance = 1.5;
+            // Place at 2 meters in front of camera
+            const distance = 2.0;
             const position = camera.position.clone().add(forward.multiplyScalar(distance));
             position.y = 0; // Ground level
             
@@ -376,6 +367,9 @@
         
         function addFurniture() {
             const position = getPlacementPosition();
+            
+            // Debug: Log placement info
+            document.getElementById('debug').innerHTML = `📍 Placing at: X:${position.x.toFixed(1)} Z:${position.z.toFixed(1)} | Camera facing: ${camera.rotation.y.toFixed(2)}rad`;
             
             let furniture;
             switch(currentType) {
@@ -394,49 +388,42 @@
             
             scene.add(furniture);
             
-            // Add a floating label
-            const labelDiv = document.createElement('div');
-            labelDiv.textContent = currentType === 'chair' ? '🪑' : (currentType === 'table' ? '📦' : '💡');
-            labelDiv.style.backgroundColor = 'rgba(0,0,0,0.7)';
-            labelDiv.style.color = 'white';
-            labelDiv.style.padding = '4px 10px';
-            labelDiv.style.borderRadius = '20px';
-            labelDiv.style.fontSize = '24px';
-            labelDiv.style.border = '2px solid gold';
-            labelDiv.style.position = 'absolute';
-            labelDiv.style.pointerEvents = 'none';
-            
-            // Create CSS2D label manually
-            const labelObj = new THREE.Object3D();
-            labelObj.position.copy(position);
-            labelObj.position.y += 0.5;
-            scene.add(labelObj);
+            // Add a glowing outline effect (simple ring at base)
+            const ringGeo = new THREE.RingGeometry(0.35, 0.45, 16);
+            const ringMat = new THREE.MeshStandardMaterial({ color: 0xffaa44, emissive: 0xff4400, emissiveIntensity: 0.5, side: THREE.DoubleSide });
+            const ring = new THREE.Mesh(ringGeo, ringMat);
+            ring.rotation.x = -Math.PI / 2;
+            ring.position.y = 0.01;
+            furniture.add(ring);
             
             furnitureItems.push({
                 mesh: furniture,
-                label: labelObj,
                 type: currentType,
                 position: position.clone()
             });
             
-            document.getElementById('status').innerHTML = `✅ ${currentType.toUpperCase()} placed at ${position.x.toFixed(1)}m, ${position.z.toFixed(1)}m in front! (${furnitureItems.length} items)`;
-            document.getElementById('status').style.background = 'rgba(0,100,0,0.8)';
+            // Visual feedback
+            const statusDiv = document.getElementById('status');
+            statusDiv.innerHTML = `✅ ${currentType.toUpperCase()} placed 2 meters in front! (${furnitureItems.length} items total)`;
+            statusDiv.style.background = 'rgba(76,175,80,0.9)';
             setTimeout(() => {
-                document.getElementById('status').style.background = 'rgba(0,0,0,0.8)';
-                document.getElementById('status').innerHTML = `🎯 TAP to place more ${currentType}s • ${furnitureItems.length} items total`;
+                statusDiv.style.background = 'rgba(0,0,0,0.85)';
+                statusDiv.innerHTML = `🎯 TAP to place more furniture • ${furnitureItems.length} items`;
             }, 2500);
             
-            // Visual feedback: flash crosshair
+            // Flash crosshair
             const crosshair = document.getElementById('crosshair');
             crosshair.style.border = '3px solid #4CAF50';
-            crosshair.style.backgroundColor = 'rgba(76,175,80,0.3)';
+            crosshair.style.backgroundColor = 'rgba(76,175,80,0.4)';
+            crosshair.style.transform = 'translate(-50%, -50%) scale(1.2)';
             setTimeout(() => {
-                crosshair.style.border = '2px solid white';
-                crosshair.style.backgroundColor = 'rgba(255,255,255,0.2)';
+                crosshair.style.border = '3px solid #ffd700';
+                crosshair.style.backgroundColor = 'rgba(255,215,0,0.2)';
+                crosshair.style.transform = 'translate(-50%, -50%) scale(1)';
             }, 200);
         }
         
-        // --- Tap to Place ---
+        // --- Tap Handler ---
         function onTap(event) {
             // Don't place if tapping on buttons
             if (event.target && (event.target.tagName === 'BUTTON' || event.target.closest('button'))) {
@@ -457,7 +444,7 @@
                 currentType = btn.dataset.type;
                 document.querySelectorAll('.furniture-btn').forEach(b => b.style.opacity = '0.6');
                 btn.style.opacity = '1';
-                document.getElementById('status').innerHTML = `✨ Selected: ${currentType.toUpperCase()} • TAP to place`;
+                document.getElementById('status').innerHTML = `✨ Selected: ${currentType.toUpperCase()} • TAP to place in front`;
                 setTimeout(() => {
                     if (document.getElementById('status').innerHTML.includes('Selected')) {
                         document.getElementById('status').innerHTML = `🎯 TAP to place ${currentType} • ${furnitureItems.length} items`;
@@ -471,66 +458,60 @@
             if (furnitureItems.length === 0) return;
             const last = furnitureItems.pop();
             scene.remove(last.mesh);
-            if (last.label) scene.remove(last.label);
             document.getElementById('status').innerHTML = `🗑️ Removed last ${last.type} • ${furnitureItems.length} left`;
         });
         
         document.getElementById('clearAll').addEventListener('click', (e) => {
             e.stopPropagation();
-            furnitureItems.forEach(item => {
-                scene.remove(item.mesh);
-                if (item.label) scene.remove(item.label);
-            });
+            furnitureItems.forEach(item => scene.remove(item.mesh));
             furnitureItems = [];
             document.getElementById('status').innerHTML = `🧹 All furniture cleared!`;
         });
         
-        // --- Device Orientation for AR Movement ---
-        let deviceOrientationAvailable = false;
+        // --- Device Orientation for looking around ---
+        let hasOrientation = false;
         
         if (window.DeviceOrientationEvent) {
             window.addEventListener('deviceorientation', (event) => {
-                if (event.alpha !== null && !deviceOrientationAvailable) {
-                    deviceOrientationAvailable = true;
-                    document.getElementById('status').innerHTML = `🎯 Move your phone to look around! TAP to place furniture`;
-                }
-                
-                // Rotate camera based on device orientation
                 if (event.gamma !== null && event.beta !== null) {
-                    // Gamma: left/right tilt (-90 to 90)
-                    // Beta: front/back tilt (-90 to 90)
-                    const gamma = Math.min(Math.max(event.gamma, -70), 70);
-                    const beta = Math.min(Math.max(event.beta, -70), 70);
+                    hasOrientation = true;
+                    // Gamma: left/right rotation (-90 to 90)
+                    // Beta: up/down rotation (-90 to 90)
+                    const gamma = Math.min(Math.max(event.gamma, -80), 80);
+                    const beta = Math.min(Math.max(event.beta, -80), 80);
                     
+                    // Apply rotation to camera
                     camera.rotation.order = 'YXZ';
                     camera.rotation.y = (gamma / 180) * Math.PI;
                     camera.rotation.x = (beta / 180) * Math.PI;
+                    
+                    document.getElementById('debug').innerHTML = `🎯 Look around! Angle: ${Math.round(gamma)}° | ${furnitureItems.length} items`;
                 }
             });
         }
         
-        // Position camera at human height
-        camera.position.set(0, 1.6, 0);
-        
-        // Update distance indicator
-        function updateDistance() {
-            if (furnitureItems.length > 0) {
-                const lastItem = furnitureItems[furnitureItems.length - 1];
-                const distance = Math.sqrt(
-                    Math.pow(lastItem.position.x - camera.position.x, 2) + 
-                    Math.pow(lastItem.position.z - camera.position.z, 2)
-                );
-                document.getElementById('distance').innerHTML = `📏 Last item: ${distance.toFixed(1)}m away`;
-            } else {
-                document.getElementById('distance').innerHTML = `📍 TAP to place furniture`;
+        // Fallback: allow mouse drag on desktop for testing
+        let isDragging = false;
+        let lastX = 0;
+        renderer.domElement.addEventListener('mousedown', (e) => {
+            if (e.button === 0) {
+                isDragging = true;
+                lastX = e.clientX;
             }
-        }
+        });
+        window.addEventListener('mousemove', (e) => {
+            if (isDragging) {
+                const delta = (e.clientX - lastX) * 0.01;
+                camera.rotation.y += delta;
+                lastX = e.clientX;
+            }
+        });
+        window.addEventListener('mouseup', () => { isDragging = false; });
         
         // Animation loop
         function animate() {
             requestAnimationFrame(animate);
             renderer.render(scene, camera);
-            updateDistance();
         }
         animate();
         
@@ -541,27 +522,46 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
         
-        // Add a demo furniture after 3 seconds
+        // --- Auto-place demo furniture after 3 seconds ---
         setTimeout(() => {
             if (furnitureItems.length === 0) {
-                const demoChair = createChair(0, 1.2, 0xCD7F32);
+                // Place a demo chair at 1.8m in front
+                const forward = new THREE.Vector3(0, 0, -1);
+                forward.applyQuaternion(camera.quaternion);
+                const demoPos = camera.position.clone().add(forward.multiplyScalar(1.8));
+                demoPos.y = 0;
+                
+                const demoChair = createChair(demoPos.x, demoPos.z, 0xCD7F32);
                 scene.add(demoChair);
+                
+                // Add ring
+                const ringGeo = new THREE.RingGeometry(0.35, 0.45, 16);
+                const ringMat = new THREE.MeshStandardMaterial({ color: 0xffaa44, emissive: 0xff4400, emissiveIntensity: 0.5, side: THREE.DoubleSide });
+                const ring = new THREE.Mesh(ringGeo, ringMat);
+                ring.rotation.x = -Math.PI / 2;
+                ring.position.y = 0.01;
+                demoChair.add(ring);
+                
                 furnitureItems.push({
                     mesh: demoChair,
-                    label: null,
                     type: 'chair',
-                    position: new THREE.Vector3(0, 0, 1.2)
+                    position: demoPos.clone()
                 });
-                document.getElementById('status').innerHTML = `🎯 Demo chair placed 1.2m in front! TAP to add more furniture`;
-                document.getElementById('status').style.background = 'rgba(0,100,0,0.8)';
+                
+                document.getElementById('status').innerHTML = `🎉 DEMO CHAIR PLACED! Look around and TAP to add more!`;
+                document.getElementById('status').style.background = 'rgba(76,175,80,0.9)';
+                document.getElementById('debug').innerHTML = `✅ Demo chair at ${demoPos.x.toFixed(1)}, ${demoPos.z.toFixed(1)}`;
+                
                 setTimeout(() => {
-                    document.getElementById('status').style.background = 'rgba(0,0,0,0.8)';
-                }, 3000);
+                    document.getElementById('status').style.background = 'rgba(0,0,0,0.85)';
+                    document.getElementById('status').innerHTML = `🎯 TAP anywhere to place ${currentType} • ${furnitureItems.length} items`;
+                }, 4000);
             }
-        }, 3000);
+        }, 2000);
         
-        console.log('AR App Ready - Furniture will appear in front of you!');
+        console.log('AR App Ready - Furniture will appear 2 meters in front of camera!');
         console.log('Camera position:', camera.position);
+        console.log('Camera rotation:', camera.rotation);
     </script>
 </body>
 </html>
